@@ -95,7 +95,7 @@ async def get_job_status(
     db: AsyncSession = Depends(get_async_db),
 ):
     repo = AsyncJobRepository(db)
-    job = await repo.get_job_by_id(job_id)
+    job = await repo.get_job_by_id(job_id, load_relations=True)
     if not job:
         raise ResourceNotFoundException(resource="Job", resource_id=job_id)
 
