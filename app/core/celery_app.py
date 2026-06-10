@@ -11,3 +11,6 @@ celery_app = Celery(
 celery_app.conf.task_routes = {
     "app.worker.tasks.process_transactions_job": "main-queue"
 }
+
+# Suppress CPendingDeprecationWarning for Celery 6.0 compatibility
+celery_app.conf.broker_connection_retry_on_startup = True
