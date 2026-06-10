@@ -10,10 +10,10 @@ from app.services.job_service import JobService
     retry_backoff_max=60,
     retry_kwargs={"max_retries": 3},
 )
-def process_transactions_job(self, job_id: str, file_path: str):
+def process_transactions_job(self, job_id: str, file_ref: str, storage_type: str = "local"):
     db = SessionLocal()
     try:
         service = JobService(db)
-        service.process_job(job_id, file_path)
+        service.process_job(job_id, file_ref, storage_type=storage_type)
     finally:
         db.close()

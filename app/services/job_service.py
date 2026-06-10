@@ -23,7 +23,7 @@ class JobService:
         self.db = db
         self.repo = JobRepository(db)
 
-    def process_job(self, job_id: str, file_path: str):
+    def process_job(self, job_id: str, file_ref: str, storage_type: str = "local"):
         job = self.repo.get_job_by_id(job_id)
         if not job:
             logger.error(f"Job {job_id} not found. Aborting.")
@@ -34,7 +34,13 @@ class JobService:
             self.db.commit()
 
             # ── Step 1: Read & Validate ────────────────────────────────────────
-            df = pd.read_csv(file_path)
+            if storage_type == "r2":
+                from app.utils.r2_client import r2_client
+                buffer = r2_client.download(file_ref)
+                df = pd.read_csv(buffer)
+            else:
+                df = pd.read_csv(file_ref)
+
             job.row_count_raw = len(df)
 
             # Normalise column names (strip whitespace)
@@ -175,5 +181,9 @@ class JobService:
                 job.completed_at = datetime.datetime.utcnow()
                 self.db.commit()
         finally:
-            if os.path.exists(file_path):
-                os.remove(file_path)
+            if storage_type == "r2":
+                from app.utils.r2_client import r2_client
+                r2_client.delete(file_ref)
+            else:
+                if os.path.exists(file_ref):
+                    os.remove(file_ref)

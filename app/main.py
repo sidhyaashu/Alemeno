@@ -1,22 +1,14 @@
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
-from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.util import get_remote_address
+from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
 from app.core.config import settings
 from app.db.database import async_engine
 from app.api.v1.api_router import api_router
 from app.middleware.error_handler import add_exception_handlers
-
-
-# ── Rate limiter (Redis-backed) ───────────────────────────────────────────────
-# Uses Redis DB 1 so rate limit keys are isolated from Celery task data (DB 0).
-limiter = Limiter(
-    key_func=get_remote_address,
-    storage_uri=settings.RATE_LIMIT_REDIS_URL,
-)
+from app.core.limiter import limiter
 
 
 # ── Application lifespan ──────────────────────────────────────────────────────

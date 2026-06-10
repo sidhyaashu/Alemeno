@@ -12,7 +12,7 @@ from app.response.job_response import JobStatusResponseDTO, JobResultsResponseDT
 from app.response.standard_response import SuccessResponse
 from app.core.exceptions import InvalidFileException, ResourceNotFoundException
 from app.worker.tasks import process_transactions_job
-from app.main import limiter
+from app.core.limiter import limiter
 
 router = APIRouter()
 
@@ -69,11 +69,19 @@ async def upload_csv(
     repo = AsyncJobRepository(db)
     job = await repo.create_job(filename=file.filename)
 
-    file_path = os.path.join(UPLOAD_DIR, f"{job.id}_{file.filename}")
-    with open(file_path, "wb") as buffer:
-        buffer.write(raw_bytes)
+    from app.utils.r2_client import r2_client
 
-    process_transactions_job.delay(job.id, file_path)
+    if r2_client.is_available:
+        storage_type = "r2"
+        file_ref = f"uploads/{job.id}_{file.filename}"
+        r2_client.upload(file_ref, raw_bytes)
+    else:
+        storage_type = "local"
+        file_ref = os.path.join(UPLOAD_DIR, f"{job.id}_{file.filename}")
+        with open(file_ref, "wb") as buffer:
+            buffer.write(raw_bytes)
+
+    process_transactions_job.delay(job.id, file_ref, storage_type=storage_type)
 
     return SuccessResponse(
         data=JobUploadResponseDTO(job_id=job.id, status=job.status),

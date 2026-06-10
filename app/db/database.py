@@ -12,12 +12,21 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=sync_engine)
 
 # ── Async engine ─────────────────────────────────────────────────────────────
 # Used by FastAPI route handlers — non-blocking I/O via asyncpg driver.
+import os
+from sqlalchemy.pool import NullPool
+
+extra_args = {}
+if os.getenv("TESTING") == "true":
+    extra_args["poolclass"] = NullPool
+else:
+    extra_args["pool_size"] = 10
+    extra_args["max_overflow"] = 20
+
 async_engine = create_async_engine(
     settings.ASYNC_DATABASE_URL,
     echo=False,
     pool_pre_ping=True,      # detect stale connections
-    pool_size=10,            # base connection pool size
-    max_overflow=20,         # burst capacity
+    **extra_args
 )
 AsyncSessionLocal = async_sessionmaker(
     async_engine,

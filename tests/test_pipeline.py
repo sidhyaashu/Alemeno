@@ -76,7 +76,7 @@ class TestDataCleaner:
             "is_anomaly": [False, False, False],
         })
         result = DataCleaner.detect_anomalies(df)
-        assert result.iloc[2]["is_anomaly"] is True
+        assert result.iloc[2]["is_anomaly"] == True
         assert "3x" in result.iloc[2]["anomaly_reason"]
 
     def test_anomaly_domestic_usd_case_insensitive(self):
@@ -89,7 +89,7 @@ class TestDataCleaner:
             "is_anomaly": [False],
         })
         result = DataCleaner.detect_anomalies(df)
-        assert result.iloc[0]["is_anomaly"] is True
+        assert result.iloc[0]["is_anomaly"] == True
         assert "domestic" in result.iloc[0]["anomaly_reason"].lower()
 
     def test_anomaly_domestic_usd_not_flagged_for_inr(self):
@@ -102,7 +102,7 @@ class TestDataCleaner:
             "is_anomaly": [False],
         })
         result = DataCleaner.detect_anomalies(df)
-        assert result.iloc[0]["is_anomaly"] is False
+        assert result.iloc[0]["is_anomaly"] == False
 
 
 # ─────────────────────────────────────────────
