@@ -98,11 +98,15 @@ class GeminiClient:
 
         prompt = (
             "You are an AI financial analyst.\n"
-            "Analyze the following transaction statistics and generate a 2-3 sentence narrative "
-            "summary of the user's spending behavior, and assign a 'risk_level' "
-            "(low, medium, or high) based on anomalies and high spends.\n"
-            "Return strictly a JSON object with keys 'narrative' and 'risk_level'.\n"
-            f"Statistics: {json.dumps(stats)}\n"
+            "Analyze the following transaction statistics and return a single JSON object "
+            "with EXACTLY these five keys:\n"
+            "  - total_spend_by_currency: object mapping currency code to total amount (e.g. {\"INR\": 12000.0, \"USD\": 350.0})\n"
+            "  - top_3_merchants: array of the top 3 merchants by spend, each with {merchant, total}\n"
+            "  - anomaly_count: integer count of flagged anomalous transactions\n"
+            "  - narrative: a 2-3 sentence summary of spending behavior\n"
+            "  - risk_level: one of 'low', 'medium', or 'high' based on anomalies and high spends\n"
+            "Do not include any other keys. Do not wrap in markdown.\n"
+            f"Statistics:\n{json.dumps(stats)}\n"
         )
 
         last_raw: Optional[str] = None
@@ -120,6 +124,10 @@ class GeminiClient:
                 return {
                     "narrative": result.get("narrative", ""),
                     "risk_level": result.get("risk_level", "unknown"),
+                    # LLM-generated versions of the structured fields (spec compliance)
+                    "llm_total_spend_by_currency": result.get("total_spend_by_currency"),
+                    "llm_top_3_merchants": result.get("top_3_merchants"),
+                    "llm_anomaly_count": result.get("anomaly_count"),
                     "llm_failed": False,
                 }
             except Exception as e:

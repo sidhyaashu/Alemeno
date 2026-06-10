@@ -1,6 +1,5 @@
 import io
 import os
-import shutil
 from typing import List, Optional
 
 import pandas as pd
@@ -12,12 +11,16 @@ from app.repository.job_repository import JobRepository
 from app.response.job_response import JobStatusResponseDTO, JobResultsResponseDTO, JobUploadResponseDTO
 from app.response.standard_response import SuccessResponse
 from app.core.exceptions import InvalidFileException, ResourceNotFoundException
+from app.schema.job import TransactionBase
 from app.worker.tasks import process_transactions_job
 
 router = APIRouter()
 
 UPLOAD_DIR = "uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+MAX_FILE_SIZE_MB = 10
+MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024
 
 REQUIRED_COLUMNS = {
     "txn_id", "date", "merchant", "amount",
@@ -38,9 +41,15 @@ def upload_csv(file: UploadFile = File(...), db: Session = Depends(get_db)):
     if len(raw_bytes) == 0:
         raise InvalidFileException(message="Uploaded file is empty.")
 
-    # 4. Validate it is actually parseable CSV and has required columns
+    # 4. Max file size check
+    if len(raw_bytes) > MAX_FILE_SIZE_BYTES:
+        raise InvalidFileException(
+            message=f"File too large. Maximum allowed size is {MAX_FILE_SIZE_MB}MB."
+        )
+
+    # 5. Validate it is actually parseable CSV and has required columns
     try:
-        sample_df = pd.read_csv(io.BytesIO(raw_bytes), nrows=0)  # only headers
+        sample_df = pd.read_csv(io.BytesIO(raw_bytes), nrows=0)  # headers only
     except Exception as e:
         raise InvalidFileException(message=f"Unable to parse CSV file: {str(e)}")
 
@@ -51,7 +60,7 @@ def upload_csv(file: UploadFile = File(...), db: Session = Depends(get_db)):
             message=f"CSV is missing required columns: {sorted(missing_columns)}"
         )
 
-    # 5. Persist file and create job
+    # 6. Persist file and create job
     repo = JobRepository(db)
     job = repo.create_job(filename=file.filename)
 
@@ -84,7 +93,11 @@ def get_job_results(job_id: str, db: Session = Depends(get_db)):
     if not job:
         raise ResourceNotFoundException(resource="Job", resource_id=job_id)
 
-    return SuccessResponse(data=JobResultsResponseDTO.model_validate(job))
+    # Build the response — anomalies are a filtered view of transactions
+    result = JobResultsResponseDTO.model_validate(job)
+    result.anomalies = [t for t in result.transactions if t.is_anomaly]
+
+    return SuccessResponse(data=result)
 
 
 @router.get("", response_model=SuccessResponse[List[JobStatusResponseDTO]])

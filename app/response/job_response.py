@@ -22,13 +22,14 @@ class JobStatusResponseDTO(BaseModel):
 
 class JobResultsResponseDTO(JobStatusResponseDTO):
     """
-    Full results response. Includes:
-    - cleaned transactions list
-    - flagged anomalies (is_anomaly=True rows within transactions)
-    - per-category spend breakdown (in summary.category_breakdown)
-    - LLM narrative summary (in summary.narrative / risk_level)
+    Full results response per assignment spec:
+    - transactions: all cleaned transactions
+    - anomalies: flagged anomalous transactions (is_anomaly=True) — explicit separate list
+    - summary.category_breakdown: per-category spend breakdown
+    - summary.narrative / risk_level: LLM narrative summary
     """
     transactions: List[TransactionBase] = []
+    anomalies: List[TransactionBase] = []   # explicit flagged anomalies list
 
     class Config:
         from_attributes = True
