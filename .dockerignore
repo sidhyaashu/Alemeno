@@ -1,0 +1,54 @@
+# Git
+.git
+.gitignore
+
+# Docker
+.dockerignore
+Dockerfile
+docker-compose.yml
+
+# Python build and cache files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.pyre/
+.pytype/
+*.egg-info/
+build/
+dist/
+
+# Environments and Secrets
+.env
+.env.*
+venv/
+.venv/
+env/
+ENV/
+
+# Databases & local data stores
+*.db
+*.sqlite
+*.sqlite3
+db_data/
+postgres_data/
+
+# IDEs and editors
+.vscode/
+.idea/
+*.swp
+*.swo
+.project
+.pydevproject
+
+# Documentation and meta files
+README.md
+docs/
+simulation.html
+
+# OS metadata
+.DS_Store
+Thumbs.db
+Desktop.ini
