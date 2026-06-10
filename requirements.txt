@@ -3,6 +3,7 @@ uvicorn==0.27.1
 python-multipart==0.0.9
 sqlalchemy==2.0.28
 psycopg2-binary==2.9.9
+asyncpg==0.29.0
 celery==5.3.6
 redis==5.0.3
 pandas==2.2.1
@@ -10,6 +11,12 @@ google-genai==0.3.0
 python-dotenv==1.0.1
 pydantic==2.6.4
 pydantic-settings==2.2.1
+
+# Async rate limiting with Redis backend
+slowapi==0.1.9
+
+# Database migrations
+alembic==1.13.1
 
 # Testing
 pytest==8.1.1
