@@ -3,7 +3,7 @@ import os
 from typing import List, Optional
 
 import pandas as pd
-from fastapi import APIRouter, Depends, Request, UploadFile, File
+from fastapi import APIRouter, Depends, Request, UploadFile, File, Header
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.database import get_async_db
@@ -34,6 +34,7 @@ async def upload_csv(
     request: Request,          # required by slowapi for IP extraction
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_async_db),
+    x_gemini_api_key: Optional[str] = Header(None),
 ):
     # 1. Extension check
     if not file.filename.endswith(".csv"):
@@ -81,7 +82,7 @@ async def upload_csv(
         with open(file_ref, "wb") as buffer:
             buffer.write(raw_bytes)
 
-    process_transactions_job.delay(job.id, file_ref, storage_type=storage_type)
+    process_transactions_job.delay(job.id, file_ref, storage_type=storage_type, gemini_api_key=x_gemini_api_key)
 
     return SuccessResponse(
         data=JobUploadResponseDTO(job_id=job.id, status=job.status),

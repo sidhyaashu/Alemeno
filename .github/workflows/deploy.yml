@@ -1,0 +1,51 @@
+name: Deploy to AWS VM
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy to AWS VM via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.AWS_HOST }}
+          username: ${{ secrets.AWS_USERNAME }}
+          key: ${{ secrets.AWS_SSH_PRIVATE_KEY }}
+          port: 22
+          script: |
+            # Create deployment directory if not exists
+            mkdir -p ~/alemeno-app
+            cd ~/alemeno-app
+
+            # Pull latest changes from git
+            if [ ! -d ".git" ]; then
+              git clone https://github.com/${{ github.repository }}.git .
+            else
+              git fetch origin main
+              git reset --hard origin/main
+            fi
+
+            # Setup .env file using GitHub secrets
+            echo "DATABASE_URL=${{ secrets.DATABASE_URL }}" > .env
+            echo "CELERY_BROKER_URL=${{ secrets.CELERY_BROKER_URL }}" >> .env
+            echo "CELERY_RESULT_BACKEND=${{ secrets.CELERY_RESULT_BACKEND }}" >> .env
+            echo "RATE_LIMIT_REDIS_URL=${{ secrets.RATE_LIMIT_REDIS_URL }}" >> .env
+            echo "GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}" >> .env
+            echo "GEMINI_MODEL=${{ secrets.GEMINI_MODEL }}" >> .env
+            echo "R2_ACCOUNT_ID=${{ secrets.R2_ACCOUNT_ID }}" >> .env
+            echo "R2_ACCESS_KEY_ID=${{ secrets.R2_ACCESS_KEY_ID }}" >> .env
+            echo "R2_SECRET_ACCESS_KEY=${{ secrets.R2_SECRET_ACCESS_KEY }}" >> .env
+            echo "R2_BUCKET_NAME=${{ secrets.R2_BUCKET_NAME }}" >> .env
+            echo "NGROK_AUTHTOKEN=${{ secrets.NGROK_AUTHTOKEN }}" >> .env
+            echo "NEXT_PUBLIC_API_URL=${{ secrets.NEXT_PUBLIC_API_URL }}" >> .env
+
+            # Build and start all services (including backend, worker, client, and ngrok)
+            docker compose down -v
+            docker compose up --build -d
+
+            # Print active containers
+            docker compose ps

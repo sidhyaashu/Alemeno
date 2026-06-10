@@ -10,10 +10,11 @@ from app.services.job_service import JobService
     retry_backoff_max=60,
     retry_kwargs={"max_retries": 3},
 )
-def process_transactions_job(self, job_id: str, file_ref: str, storage_type: str = "local"):
+def process_transactions_job(self, job_id: str, file_ref: str, storage_type: str = "local", gemini_api_key: str = None):
     db = SessionLocal()
     try:
         service = JobService(db)
-        service.process_job(job_id, file_ref, storage_type=storage_type)
+        service.process_job(job_id, file_ref, storage_type=storage_type, gemini_api_key=gemini_api_key)
     finally:
         db.close()
+

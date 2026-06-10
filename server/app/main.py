@@ -21,6 +21,8 @@ async def lifespan(app: FastAPI):
     await async_engine.dispose()
 
 
+from fastapi.middleware.cors import CORSMiddleware
+
 # ── FastAPI application ───────────────────────────────────────────────────────
 app = FastAPI(
     title=settings.PROJECT_NAME,
@@ -28,6 +30,15 @@ app = FastAPI(
     version="1.0.0",
     openapi_url=f"{settings.API_V1_STR}/openapi.json",
     lifespan=lifespan,
+)
+
+# Wire CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # Wire rate limiter into the app

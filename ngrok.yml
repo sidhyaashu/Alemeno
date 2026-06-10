@@ -1,0 +1,6 @@
+version: "2"
+tunnels:
+  entrypoint:
+    proto: http
+    addr: nginx:80
+    domain: graceful-venue-refute.ngrok-free.dev

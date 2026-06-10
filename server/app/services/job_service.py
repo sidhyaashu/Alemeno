@@ -23,7 +23,7 @@ class JobService:
         self.db = db
         self.repo = JobRepository(db)
 
-    def process_job(self, job_id: str, file_ref: str, storage_type: str = "local"):
+    def process_job(self, job_id: str, file_ref: str, storage_type: str = "local", gemini_api_key: str = None):
         job = self.repo.get_job_by_id(job_id)
         if not job:
             logger.error(f"Job {job_id} not found. Aborting.")
@@ -65,7 +65,7 @@ class JobService:
                     uncat_df[["txn_id", "merchant", "amount", "currency", "notes"]]
                     .to_dict(orient="records")
                 )
-                classified_batch = gemini_client.classify_transactions_batch(batch)
+                classified_batch = gemini_client.classify_transactions_batch(batch, custom_api_key=gemini_api_key)
                 class_map = {item["txn_id"]: item for item in classified_batch}
 
                 def apply_llm_result(row):
@@ -150,7 +150,7 @@ class JobService:
                 "category_breakdown": category_breakdown,
             }
 
-            llm_summary = gemini_client.generate_narrative_summary(stats)
+            llm_summary = gemini_client.generate_narrative_summary(stats, custom_api_key=gemini_api_key)
             # generate_narrative_summary NEVER raises — it returns llm_failed=True on failure
 
             summary = JobSummary(

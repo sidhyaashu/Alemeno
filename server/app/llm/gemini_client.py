@@ -13,7 +13,7 @@ class GeminiClient:
         if not settings.GEMINI_API_KEY:
             logger.warning(
                 "GEMINI_API_KEY is not set. LLM calls will be skipped and "
-                "marked as llm_failed=True."
+                "marked as llm_failed=True unless a custom key is provided at runtime."
             )
             return
         try:
@@ -23,14 +23,37 @@ class GeminiClient:
         except Exception as e:
             logger.error(f"Failed to initialize Gemini Client: {e}")
 
+    def _get_client_and_module(self, custom_api_key: Optional[str] = None):
+        """Return a client instance and the genai module, dynamically loading if a custom key is provided."""
+        if custom_api_key:
+            try:
+                from google import genai
+                client = genai.Client(api_key=custom_api_key)
+                return client, genai
+            except Exception as e:
+                logger.error(f"Failed to initialize custom Gemini Client: {e}")
+                return None, None
+        
+        # Fall back to default settings client
+        client = self.client
+        genai_mod = getattr(self, "_genai", None)
+        if not client and not genai_mod:
+            try:
+                from google import genai
+                genai_mod = genai
+            except Exception:
+                pass
+        return client, genai_mod
+
     def classify_transactions_batch(
-        self, transactions: List[Dict[str, Any]], max_retries: int = 3
+        self, transactions: List[Dict[str, Any]], custom_api_key: Optional[str] = None, max_retries: int = 3
     ) -> List[Dict[str, Any]]:
         """
         Batch-classify transactions via LLM.
         Returns each item with llm_category, llm_raw_response, and llm_failed fields.
         """
-        if not self.client or not transactions:
+        client, genai_mod = self._get_client_and_module(custom_api_key)
+        if not client or not transactions:
             for t in transactions:
                 t["llm_category"] = None
                 t["llm_raw_response"] = None
@@ -48,10 +71,10 @@ class GeminiClient:
         last_raw: Optional[str] = None
         for attempt in range(max_retries):
             try:
-                response = self.client.models.generate_content(
+                response = client.models.generate_content(
                     model=settings.GEMINI_MODEL,
                     contents=prompt,
-                    config=self._genai.types.GenerateContentConfig(
+                    config=genai_mod.types.GenerateContentConfig(
                         response_mime_type="application/json",
                     ),
                 )
@@ -83,13 +106,14 @@ class GeminiClient:
         return transactions
 
     def generate_narrative_summary(
-        self, stats: Dict[str, Any], max_retries: int = 3
+        self, stats: Dict[str, Any], custom_api_key: Optional[str] = None, max_retries: int = 3
     ) -> Dict[str, Any]:
         """
         Generate a narrative summary via LLM.
         Always returns a dict — never raises. Sets llm_failed=True if all retries exhausted.
         """
-        if not self.client:
+        client, genai_mod = self._get_client_and_module(custom_api_key)
+        if not client:
             return {
                 "narrative": "LLM client not configured (missing API key).",
                 "risk_level": "unknown",
@@ -112,10 +136,10 @@ class GeminiClient:
         last_raw: Optional[str] = None
         for attempt in range(max_retries):
             try:
-                response = self.client.models.generate_content(
+                response = client.models.generate_content(
                     model=settings.GEMINI_MODEL,
                     contents=prompt,
-                    config=self._genai.types.GenerateContentConfig(
+                    config=genai_mod.types.GenerateContentConfig(
                         response_mime_type="application/json",
                     ),
                 )
@@ -145,3 +169,4 @@ class GeminiClient:
 
 
 gemini_client = GeminiClient()
+
