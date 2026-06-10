@@ -1,25 +1,39 @@
 import json
 import time
 import logging
-from typing import List, Dict, Any
-from google import genai
+from typing import List, Dict, Any, Optional
 from app.core.config import settings
-from app.core.exceptions import LLMIntegrationException
 
 logger = logging.getLogger(__name__)
 
+
 class GeminiClient:
     def __init__(self):
+        self.client = None
+        if not settings.GEMINI_API_KEY:
+            logger.warning(
+                "GEMINI_API_KEY is not set. LLM calls will be skipped and "
+                "marked as llm_failed=True."
+            )
+            return
         try:
-            # Assumes GEMINI_API_KEY is available via env or settings
+            from google import genai
             self.client = genai.Client(api_key=settings.GEMINI_API_KEY)
+            self._genai = genai
         except Exception as e:
             logger.error(f"Failed to initialize Gemini Client: {e}")
-            self.client = None
 
-    def classify_transactions_batch(self, transactions: List[Dict[str, Any]], max_retries=3) -> List[Dict[str, Any]]:
+    def classify_transactions_batch(
+        self, transactions: List[Dict[str, Any]], max_retries: int = 3
+    ) -> List[Dict[str, Any]]:
+        """
+        Batch-classify transactions via LLM.
+        Returns each item with llm_category, llm_raw_response, and llm_failed fields.
+        """
         if not self.client or not transactions:
             for t in transactions:
+                t["llm_category"] = None
+                t["llm_raw_response"] = None
                 t["llm_failed"] = True
             return transactions
 
@@ -31,61 +45,95 @@ class GeminiClient:
             f"Transactions:\n{json.dumps(transactions)}\n"
         )
 
+        last_raw: Optional[str] = None
         for attempt in range(max_retries):
             try:
                 response = self.client.models.generate_content(
                     model=settings.GEMINI_MODEL,
                     contents=prompt,
-                    config=genai.types.GenerateContentConfig(
+                    config=self._genai.types.GenerateContentConfig(
                         response_mime_type="application/json",
-                    )
+                    ),
                 )
-                result = json.loads(response.text)
-                result_map = {item["txn_id"]: item.get("category", "Other") for item in result if "txn_id" in item}
-                
+                last_raw = response.text
+                result = json.loads(last_raw)
+                result_map = {
+                    item["txn_id"]: item.get("category", "Other")
+                    for item in result
+                    if "txn_id" in item
+                }
+
                 for t in transactions:
                     t["llm_category"] = result_map.get(t["txn_id"], "Other")
+                    t["llm_raw_response"] = last_raw
                     t["llm_failed"] = False
                 return transactions
+
             except Exception as e:
                 logger.warning(f"LLM Classification attempt {attempt + 1} failed: {e}")
-                time.sleep(2 ** attempt)
+                if attempt < max_retries - 1:
+                    time.sleep(2 ** attempt)
 
-        # Fallback
+        # All retries exhausted — mark as failed, continue
+        logger.error("LLM Classification failed after all retries. Marking batch as llm_failed.")
         for t in transactions:
+            t["llm_category"] = None
+            t["llm_raw_response"] = last_raw
             t["llm_failed"] = True
         return transactions
 
-    def generate_narrative_summary(self, stats: Dict[str, Any], max_retries=3) -> Dict[str, Any]:
+    def generate_narrative_summary(
+        self, stats: Dict[str, Any], max_retries: int = 3
+    ) -> Dict[str, Any]:
+        """
+        Generate a narrative summary via LLM.
+        Always returns a dict — never raises. Sets llm_failed=True if all retries exhausted.
+        """
         if not self.client:
-            return {"narrative": "LLM client not configured or failed to init.", "risk_level": "unknown"}
-            
+            return {
+                "narrative": "LLM client not configured (missing API key).",
+                "risk_level": "unknown",
+                "llm_failed": True,
+            }
+
         prompt = (
             "You are an AI financial analyst.\n"
-            "Analyze the following transaction statistics and generate a 2-3 sentence narrative summary "
-            "of the user's spending behavior, and assign a 'risk_level' (low, medium, or high) based on anomalies and high spends.\n"
+            "Analyze the following transaction statistics and generate a 2-3 sentence narrative "
+            "summary of the user's spending behavior, and assign a 'risk_level' "
+            "(low, medium, or high) based on anomalies and high spends.\n"
             "Return strictly a JSON object with keys 'narrative' and 'risk_level'.\n"
             f"Statistics: {json.dumps(stats)}\n"
         )
 
+        last_raw: Optional[str] = None
         for attempt in range(max_retries):
             try:
                 response = self.client.models.generate_content(
                     model=settings.GEMINI_MODEL,
                     contents=prompt,
-                    config=genai.types.GenerateContentConfig(
+                    config=self._genai.types.GenerateContentConfig(
                         response_mime_type="application/json",
-                    )
+                    ),
                 )
-                result = json.loads(response.text)
+                last_raw = response.text
+                result = json.loads(last_raw)
                 return {
                     "narrative": result.get("narrative", ""),
-                    "risk_level": result.get("risk_level", "unknown")
+                    "risk_level": result.get("risk_level", "unknown"),
+                    "llm_failed": False,
                 }
             except Exception as e:
                 logger.warning(f"LLM Narrative attempt {attempt + 1} failed: {e}")
-                time.sleep(2 ** attempt)
+                if attempt < max_retries - 1:
+                    time.sleep(2 ** attempt)
 
-        raise LLMIntegrationException("Failed to generate narrative after retries.")
+        # All retries exhausted — do NOT raise, just mark as failed
+        logger.error("LLM Narrative failed after all retries. Marking as llm_failed.")
+        return {
+            "narrative": "Failed to generate narrative after retries.",
+            "risk_level": "unknown",
+            "llm_failed": True,
+        }
+
 
 gemini_client = GeminiClient()
