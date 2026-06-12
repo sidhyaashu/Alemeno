@@ -11,7 +11,6 @@ class JobRepository:
     def get_job_by_id(self, job_id: str, load_relations: bool = False) -> Optional[Job]:
         query = self.db.query(Job).filter(Job.id == job_id)
         if load_relations:
-            # Eager-load summary and transactions to avoid detached-instance errors
             query = query.options(
                 joinedload(Job.summary),
                 joinedload(Job.transactions),

@@ -55,27 +55,8 @@ The anomaly detection engine analyzes transaction entries using two distinct fil
 
 ---
 
-## 🏗️ System Architecture
 
-```
-┌────────────────┐       ┌────────────────────┐       ┌──────────────────┐
-│ Next.js Client │──────▶│   FastAPI API      │──────▶│  Redis (Queue)   │
-│ (Port 3000)    │◀      │   (Port 8000)      │       └────────┬─────────┘
-└────────────────┘ └─    └─────────┬──────────┘                │
-  │                  │             │                           ▼
-  │                  │             ▼                  ┌──────────────────┐
-  │ Polls /status    └───────  PostgreSQL             │ Celery Worker    │
-  ▼                            (Port 5432) ◀──────────│ (Runs Pipeline)  │
-Get Results                    └──────────────────────└────────┬─────────┘
-                                                               │
-                                                   ┌───────────▼────────────┐
-                                                   │  Processing Steps:     │
-                                                   │  1. Cleanse & Parse    │
-                                                   │  2. Anomaly Flags      │
-                                                   │  3. Gemini Classify    │
-                                                   │  4. Gemini Narrative   │
-                                                   └────────────────────────┘
-```
+
 
 ### Request Lifecycle
 1. **Upload**: The user uploads a statement. FastAPI performs validations (file extension, empty check, missing columns, <= 10MB size) and writes it to storage.
@@ -98,6 +79,162 @@ Get Results                    └───────────────�
 * **Analytics & AI**: Pandas, Google Gemini API SDK (`gemini-2.5-flash`)
 
 ---
+## 🏗️ System Architecture
+```mermaid
+flowchart TD
+
+    A[User Uploads CSV] --> B[FastAPI API Endpoint]
+
+    B --> C[AsyncJobRepository]
+    C --> D[(PostgreSQL Jobs Table)]
+
+    D --> E[Create Job Status = Pending]
+
+    E --> F[Celery Task Dispatch]
+
+    F --> G[(Redis Broker)]
+
+    G --> H[Celery Worker]
+
+    H --> I[process_transactions_job]
+
+    I --> J[JobService]
+
+    J --> K[JobRepository]
+    K --> D
+
+    J --> L[Read CSV]
+
+    L --> M[Data Cleaning]
+    M --> N[Normalize Dates]
+    M --> O[Remove Duplicates]
+    M --> P[Fill Missing Categories]
+
+    P --> Q[Anomaly Detection]
+
+    Q --> R[Statistical Outlier Check]
+    Q --> S[Currency-Merchant Validation]
+
+    S --> T[LLM Batch Classification]
+
+    T --> U[Gemini API]
+
+    U --> V[Assign Categories]
+
+    V --> W[Generate Narrative Summary]
+
+    W --> X[Gemini API]
+
+    X --> Y[Job Summary]
+
+    Y --> Z[(PostgreSQL)]
+
+    V --> AA[(Transactions Table)]
+
+    Z --> AB[Update Job Status Completed]
+
+    AB --> AC["GET /jobs"]
+    AB --> AD["GET /jobs/{id}"]
+    AB --> AE["GET /jobs/{id}/results"]
+
+    AC --> AF[Frontend/User]
+    AD --> AF
+    AE --> AF
+```
+
+---
+
+### Cleaner Version
+
+```mermaid
+flowchart LR
+
+    User --> FastAPI
+
+    FastAPI -->|Create Pending Job| PostgreSQL
+
+    FastAPI -->|Send Task| Redis
+
+    Redis --> CeleryWorker
+
+    CeleryWorker --> JobService
+
+    JobService --> DataCleaning
+    DataCleaning --> AnomalyDetection
+    AnomalyDetection --> GeminiClassification
+    GeminiClassification --> SummaryGeneration
+
+    GeminiClassification --> GeminiAPI
+    SummaryGeneration --> GeminiAPI
+
+    JobService --> PostgreSQL
+
+    User -->|Poll Status| FastAPI
+
+    FastAPI --> PostgreSQL
+
+    PostgreSQL --> FastAPI
+
+    FastAPI --> User
+```
+
+---
+
+### Architecture Diagram with Components
+
+```mermaid
+flowchart TB
+
+    subgraph Client
+        U[User]
+    end
+
+    subgraph API Layer
+        F[FastAPI]
+        AR[AsyncJobRepository]
+    end
+
+    subgraph Queue Layer
+        R[(Redis)]
+        CW[Celery Worker]
+        T[Tasks.py]
+    end
+
+    subgraph Business Layer
+        JS[JobService]
+        JR[JobRepository]
+        DC[DataCleaner]
+        AD[Anomaly Detection]
+        GC[Gemini Client]
+    end
+
+    subgraph Storage
+        PG[(PostgreSQL)]
+    end
+
+    U --> F
+    F --> AR
+    AR --> PG
+
+    F --> R
+
+    R --> CW
+    CW --> T
+    T --> JS
+
+    JS --> JR
+    JR --> PG
+
+    JS --> DC
+    DC --> AD
+    AD --> GC
+
+    GC --> PG
+    JS --> PG
+
+    PG --> F
+    F --> U
+```
 
 ## 🚀 How to Run the Project
 
